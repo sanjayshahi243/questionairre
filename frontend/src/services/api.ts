@@ -2,7 +2,8 @@ import {
   Question, 
   QuestionSet, 
   CreateQuestionSetRequest, 
-  CreateQuestionSetQuestionRequest 
+  CreateQuestionSetQuestionRequest,
+  Dependency
 } from '../types/questionnaire';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -41,8 +42,8 @@ function createAuthHeaders(): HeadersInit {
   return headers;
 }
 
-export const questionnaireApi = {
-  // Fetch all available questions
+export const apiService = {
+  // Questions
   async getQuestions(): Promise<Question[]> {
     const response = await fetch(`${API_BASE_URL}/questions/`, {
       method: 'GET',
@@ -51,7 +52,41 @@ export const questionnaireApi = {
     return handleResponse<Question[]>(response);
   },
 
-  // Create a new question set
+  async createQuestion(data: Partial<Question>): Promise<Question> {
+    const response = await fetch(`${API_BASE_URL}/questions/`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<Question>(response);
+  },
+
+  async updateQuestion(id: string, data: Partial<Question>): Promise<Question> {
+    const response = await fetch(`${API_BASE_URL}/questions/${id}/`, {
+      method: 'PATCH',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<Question>(response);
+  },
+
+  async deleteQuestion(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/questions/${id}/`, {
+      method: 'DELETE',
+      headers: createAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete question');
+  },
+
+  // Question Sets
+  async getQuestionSets(): Promise<QuestionSet[]> {
+    const response = await fetch(`${API_BASE_URL}/question-sets/`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+    return handleResponse<QuestionSet[]>(response);
+  },
+
   async createQuestionSet(data: CreateQuestionSetRequest): Promise<QuestionSet> {
     const response = await fetch(`${API_BASE_URL}/question-sets/`, {
       method: 'POST',
@@ -61,7 +96,6 @@ export const questionnaireApi = {
     return handleResponse<QuestionSet>(response);
   },
 
-  // Add a question to a question set
   async addQuestionToSet(data: CreateQuestionSetQuestionRequest): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/question-set-questions/`, {
       method: 'POST',
@@ -71,7 +105,6 @@ export const questionnaireApi = {
     return handleResponse<any>(response);
   },
 
-  // Bulk add questions to a question set
   async bulkAddQuestionsToSet(questionSetId: string, questions: CreateQuestionSetQuestionRequest[]): Promise<any[]> {
     const promises = questions.map(question => 
       this.addQuestionToSet({
@@ -80,5 +113,40 @@ export const questionnaireApi = {
       })
     );
     return Promise.all(promises);
+  },
+
+  // Dependencies
+  async getDependencies(): Promise<Dependency[]> {
+    const response = await fetch(`${API_BASE_URL}/dependencies/`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+    return handleResponse<Dependency[]>(response);
+  },
+
+  async createDependency(data: Partial<Dependency>): Promise<Dependency> {
+    const response = await fetch(`${API_BASE_URL}/dependencies/`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<Dependency>(response);
+  },
+
+  async updateDependency(id: string, data: Partial<Dependency>): Promise<Dependency> {
+    const response = await fetch(`${API_BASE_URL}/dependencies/${id}/`, {
+      method: 'PATCH',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<Dependency>(response);
+  },
+
+  async deleteDependency(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/dependencies/${id}/`, {
+      method: 'DELETE',
+      headers: createAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete dependency');
   },
 }; 

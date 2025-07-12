@@ -55,4 +55,14 @@ export interface SelectedQuestion {
   question: Question;
   order: number;
   is_required: boolean;
+}
+
+export interface Dependency {
+  id: string;
+  question: string;
+  dependent_question: string;
+  operator: string;
+  value: string;
+  created_at: string;
+  updated_at: string;
 } 

@@ -97,11 +97,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           dispatch({ type: 'AUTH_FAILURE', payload: 'Session expired' });
         }
       } else {
+        // No token, user is not authenticated
         dispatch({ type: 'AUTH_FAILURE', payload: '' });
       }
     };
 
-    checkAuth();
+    // Add a small delay to prevent immediate API calls during development
+    const timer = setTimeout(checkAuth, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Login function

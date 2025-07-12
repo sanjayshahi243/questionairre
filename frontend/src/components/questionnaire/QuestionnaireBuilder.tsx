@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Question, SelectedQuestion, CreateQuestionSetRequest, CreateQuestionSetQuestionRequest } from '../../types/questionnaire';
-import { questionnaireApi } from '../../services/api';
+import { apiService } from '../../services/api';
 import { QuestionList } from './QuestionList';
 import { QuestionSetForm } from './QuestionSetForm';
 import { SelectedQuestionsList } from './SelectedQuestionsList';
@@ -25,7 +25,7 @@ export const QuestionnaireBuilder: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const fetchedQuestions = await questionnaireApi.getQuestions();
+      const fetchedQuestions = await apiService.getQuestions();
       setQuestions(fetchedQuestions.filter(q => q.is_active));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch questions');
@@ -103,7 +103,7 @@ export const QuestionnaireBuilder: React.FC = () => {
       setSuccess(null);
 
       // Create the question set
-      const questionSet = await questionnaireApi.createQuestionSet(formData);
+      const questionSet = await apiService.createQuestionSet(formData);
 
       // Prepare questions for the set
       const questionSetQuestions: CreateQuestionSetQuestionRequest[] = selectedQuestions.map(sq => ({
@@ -114,7 +114,7 @@ export const QuestionnaireBuilder: React.FC = () => {
       }));
 
       // Add questions to the set
-      await questionnaireApi.bulkAddQuestionsToSet(questionSet.id, questionSetQuestions);
+      await apiService.bulkAddQuestionsToSet(questionSet.id, questionSetQuestions);
 
       setSuccess(`Questionnaire "${formData.name}" created successfully!`);
       setSelectedQuestions([]);
