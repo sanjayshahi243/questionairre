@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}API Documentation{% endblock title %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">API Documentation</h1>
+            
+            <div class="alert alert-info">
+                <h4 class="alert-heading">Dynamic Questionnaire System API</h4>
+                <p>
+                    Welcome to the API documentation for the Dynamic Questionnaire System. 
+                    This API provides comprehensive endpoints for managing questionnaires, questions, answers, and conditional logic.
+                </p>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-file-code text-primary"></i> Swagger UI
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">
+                                Interactive API documentation with the ability to test endpoints directly from the browser.
+                                Perfect for exploring and testing the API.
+                            </p>
+                            <a href="{% url 'api-docs' %}" class="btn btn-primary" target="_blank">
+                                Open Swagger UI
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-book text-success"></i> ReDoc
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">
+                                Clean, responsive documentation with a focus on readability.
+                                Great for understanding the API structure and data models.
+                            </p>
+                            <a href="{% url 'api-redoc' %}" class="btn btn-success" target="_blank">
+                                Open ReDoc
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">API Overview</h5>
+                        </div>
+                        <div class="card-body">
+                            <h6>Core Endpoints</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>/api/question-sets/</strong> - Manage question sets and versions</li>
+                                <li><strong>/api/questions/</strong> - Manage reusable questions</li>
+                                <li><strong>/api/question-set-questions/</strong> - Manage questions within sets</li>
+                                <li><strong>/api/answers/</strong> - Manage user answers</li>
+                                <li><strong>/api/dependencies/</strong> - Manage conditional logic</li>
+                            </ul>
+
+                            <h6 class="mt-4">Authentication</h6>
+                            <p>
+                                Most endpoints require authentication. You can use:
+                            </p>
+                            <ul>
+                                <li><strong>Token Authentication</strong>: Include <code>Authorization: Token your-token</code> header</li>
+                                <li><strong>Session Authentication</strong>: For browser-based access</li>
+                            </ul>
+
+                            <h6 class="mt-4">Getting Started</h6>
+                            <ol>
+                                <li>Create a question set using <code>POST /api/question-sets/</code></li>
+                                <li>Add questions to the set using <code>POST /api/question-set-questions/</code></li>
+                                <li>Set up dependencies using <code>POST /api/dependencies/</code></li>
+                                <li>Collect answers using <code>POST /api/answers/</code></li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %} 
