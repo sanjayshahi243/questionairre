@@ -1,5 +1,4 @@
 import uuid
-from django.contrib.postgres.fields import JSONField
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -69,14 +68,14 @@ class Question(models.Model):
     is_active = models.BooleanField(default=True, help_text=_("Whether this question is active"))
     
     # Options for select/radio/checklist questions
-    options = JSONField(
+    options = models.JSONField(
         blank=True,
         null=True,
         help_text=_("Options for select/radio/checklist questions")
     )
     
     # Conditional logic
-    visible_if = JSONField(
+    visible_if = models.JSONField(
         blank=True,
         null=True,
         help_text=_("Conditions for when this question should be visible")
@@ -141,7 +140,7 @@ class QuestionSetQuestion(models.Model):
     )
     order = models.PositiveIntegerField(default=0, help_text=_("Order of the question within the set"))
     is_required = models.BooleanField(default=False, help_text=_("Whether this question is required in this set"))
-    overrides = JSONField(
+    overrides = models.JSONField(
         blank=True,
         null=True,
         help_text=_("Optional overrides for question text, options, or conditional logic")
@@ -204,7 +203,7 @@ class Answer(models.Model):
         null=True
     )
     boolean_answer = models.BooleanField(blank=True, null=True)
-    json_answer = JSONField(blank=True, null=True)  # For checklist, radio, select
+    json_answer = models.JSONField(blank=True, null=True)  # For checklist, radio, select
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -281,7 +280,7 @@ class Dependency(models.Model):
         related_name='dependent_questions',
         help_text=_("Question set question that the dependent question depends on")
     )
-    condition = JSONField(
+    condition = models.JSONField(
         help_text=_("Condition that must be met for the dependent question to be visible")
     )
     
