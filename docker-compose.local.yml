@@ -2,6 +2,7 @@ volumes:
   questionairre_local_postgres_data: {}
   questionairre_local_postgres_data_backups: {}
   questionairre_local_redis_data: {}
+  questionairre_local_mongodb_data: {}
 
 services:
   django: &django
@@ -13,6 +14,7 @@ services:
     depends_on:
       - postgres
       - redis
+      - mongodb
     volumes:
       - .:/app:z
     env_file:
@@ -40,6 +42,18 @@ services:
     volumes:
       - questionairre_local_redis_data:/data
 
+  mongodb:
+    image: mongo:6.0
+    container_name: questionairre_local_mongodb
+    volumes:
+      - questionairre_local_mongodb_data:/data/db
+    ports:
+      - '27017:27017'
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=questionairre
+
   celeryworker:
     <<: *django
     image: questionairre_local_celeryworker
@@ -47,6 +61,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - mongodb
     ports: []
     command: /start-celeryworker
 
@@ -57,6 +72,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - mongodb
     ports: []
     command: /start-celerybeat
 

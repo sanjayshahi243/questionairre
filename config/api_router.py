@@ -8,8 +8,8 @@ router = DefaultRouter() if settings.DEBUG else SimpleRouter()
 from questionairre.users.api.urls import urlpatterns as users_urlpatterns
 
 # Include questionnaire API URLs
-from questionairre.questionnaire.api.urls import router as questionnaire_router
+from questionairre.questionnaire.api.urls import router as questionnaire_router, urlpatterns as questionnaire_urlpatterns
 router.registry.extend(questionnaire_router.registry)
 
 app_name = "api"
-urlpatterns = router.urls + users_urlpatterns
+urlpatterns = router.urls + users_urlpatterns + questionnaire_urlpatterns

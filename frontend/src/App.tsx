@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
-import { QuestionnaireBuilder } from './components/questionnaire/QuestionnaireBuilder';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { Navigation } from './components/layout/Navigation';
 import { Dashboard } from './pages/Dashboard';
 import { QuestionsPage } from './pages/QuestionsPage';
-import { DependenciesPage } from './pages/DependenciesPage';
-import { QuestionSetsPage } from './pages/QuestionSetsPage';
+import { MongoFormsPage } from './pages/MongoFormsPage';
+import { MongoFormFillPage } from './pages/MongoFormFillPage';
+import { QuestionnaireBuilder } from './components/questionnaire/QuestionnaireBuilder';
 import { LoadingSpinner } from './components/common/LoadingSpinner';
 
 const AuthPages: React.FC = () => {
@@ -47,9 +47,10 @@ const ProtectedApp: React.FC = () => {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/questions" element={<QuestionsPage />} />
-          <Route path="/questionnaire-builder" element={<QuestionnaireBuilder />} />
-          <Route path="/dependencies" element={<DependenciesPage />} />
-          <Route path="/question-sets" element={<QuestionSetsPage />} />
+          <Route path="/mongo-forms" element={<MongoFormsPage />} />
+          <Route path="/mongo-forms/:formId" element={<MongoFormFillPage />} />
+          <Route path="/builder" element={<QuestionnaireBuilder />} />
+          <Route path="/builder/:formId" element={<QuestionnaireBuilder />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

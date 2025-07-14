@@ -1,198 +1,261 @@
 import React, { useState, useEffect } from 'react';
-import { Question, SelectedQuestion, CreateQuestionSetRequest, CreateQuestionSetQuestionRequest } from '../../types/questionnaire';
+import { useParams, useNavigate } from 'react-router-dom';
+import { MongoForm, MongoQuestion } from '../../types/questionnaire';
 import { apiService } from '../../services/api';
-import { QuestionList } from './QuestionList';
-import { QuestionSetForm } from './QuestionSetForm';
-import { SelectedQuestionsList } from './SelectedQuestionsList';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { SuccessMessage } from '../common/SuccessMessage';
+import { QuestionsTab } from './tabs/QuestionsTab';
+import { LogicTab } from './tabs/LogicTab';
+import { PreviewTab } from './tabs/PreviewTab';
+import { SettingsTab } from './tabs/SettingsTab';
+
+type TabType = 'questions' | 'logic' | 'preview' | 'settings';
 
 export const QuestionnaireBuilder: React.FC = () => {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [selectedQuestions, setSelectedQuestions] = useState<SelectedQuestion[]>([]);
+  const { formId } = useParams<{ formId: string }>();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabType>('questions');
+  const [form, setForm] = useState<MongoForm | null>(null);
+  const [questions, setQuestions] = useState<MongoQuestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Fetch questions on component mount
-  useEffect(() => {
-    fetchQuestions();
-  }, []);
+  const isNewForm = !formId || formId === 'new';
 
-  const fetchQuestions = async () => {
+  useEffect(() => {
+    if (isNewForm) {
+      // Initialize new form
+      setForm({
+        _id: '',
+        title: 'Untitled Form',
+        description: '',
+        questions: [],
+        is_active: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      setLoading(false);
+    } else {
+      // Load existing form
+      fetchForm();
+    }
+    fetchQuestions();
+  }, [formId]);
+
+  const fetchForm = async () => {
     try {
       setLoading(true);
       setError(null);
-      const fetchedQuestions = await apiService.getQuestions();
-      setQuestions(fetchedQuestions.filter(q => q.is_active));
+      const fetchedForm = await apiService.getMongoForm(formId!);
+      setForm(fetchedForm);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch questions');
+      setError(err instanceof Error ? err.message : 'Failed to fetch form');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQuestionSelect = (question: Question) => {
-    const isAlreadySelected = selectedQuestions.some(sq => sq.question.id === question.id);
-    if (isAlreadySelected) {
-      setError('This question is already selected');
-      return;
+  const fetchQuestions = async () => {
+    try {
+      const fetchedQuestions = await apiService.getMongoQuestions();
+      setQuestions(fetchedQuestions);
+    } catch (err) {
+      console.error('Failed to fetch questions:', err);
     }
-
-    const newSelectedQuestion: SelectedQuestion = {
-      question,
-      order: selectedQuestions.length + 1,
-      is_required: false,
-    };
-
-    setSelectedQuestions([...selectedQuestions, newSelectedQuestion]);
-    setError(null);
   };
 
-  const handleQuestionRemove = (questionId: string) => {
-    const updatedQuestions = selectedQuestions
-      .filter(sq => sq.question.id !== questionId)
-      .map((sq, index) => ({ ...sq, order: index + 1 }));
-    
-    setSelectedQuestions(updatedQuestions);
+  const handleSave = async () => {
+    if (!form) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      if (isNewForm) {
+        const newForm = await apiService.createMongoForm(form);
+        setForm(newForm);
+        navigate(`/builder/${newForm._id}`);
+        setSuccess('Form created successfully!');
+      } else {
+        const updatedForm = await apiService.updateMongoForm(form._id, form);
+        setForm(updatedForm);
+        setSuccess('Form updated successfully!');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save form');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleQuestionUpdate = (questionId: string, updates: Partial<SelectedQuestion>) => {
-    setSelectedQuestions(prev => 
-      prev.map(sq => 
-        sq.question.id === questionId 
-          ? { ...sq, ...updates }
-          : sq
-      )
-    );
+  const handleDuplicate = async () => {
+    if (!form || isNewForm) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+      const duplicatedForm = await apiService.duplicateMongoForm(form._id);
+      navigate(`/builder/${duplicatedForm._id}`);
+      setSuccess('Form duplicated successfully!');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to duplicate form');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleOrderChange = (questionId: string, newOrder: number) => {
-    if (newOrder < 1 || newOrder > selectedQuestions.length) return;
+  const handleDelete = async () => {
+    if (!form || isNewForm) return;
 
-    const updatedQuestions = [...selectedQuestions];
-    const currentIndex = updatedQuestions.findIndex(sq => sq.question.id === questionId);
-    const currentQuestion = updatedQuestions[currentIndex];
-
-    // Remove the question from its current position
-    updatedQuestions.splice(currentIndex, 1);
-
-    // Insert it at the new position
-    updatedQuestions.splice(newOrder - 1, 0, currentQuestion);
-
-    // Update all order numbers
-    const reorderedQuestions = updatedQuestions.map((sq, index) => ({
-      ...sq,
-      order: index + 1,
-    }));
-
-    setSelectedQuestions(reorderedQuestions);
-  };
-
-  const handleSubmit = async (formData: CreateQuestionSetRequest) => {
-    if (selectedQuestions.length === 0) {
-      setError('Please select at least one question');
+    if (!window.confirm('Are you sure you want to delete this form? This action cannot be undone.')) {
       return;
     }
 
     try {
-      setSubmitting(true);
+      setSaving(true);
       setError(null);
-      setSuccess(null);
-
-      // Create the question set
-      const questionSet = await apiService.createQuestionSet(formData);
-
-      // Prepare questions for the set
-      const questionSetQuestions: CreateQuestionSetQuestionRequest[] = selectedQuestions.map(sq => ({
-        question_set: questionSet.id,
-        question_id: sq.question.id,
-        order: sq.order,
-        is_required: sq.is_required,
-      }));
-
-      // Add questions to the set
-      await apiService.bulkAddQuestionsToSet(questionSet.id, questionSetQuestions);
-
-      setSuccess(`Questionnaire "${formData.name}" created successfully!`);
-      setSelectedQuestions([]);
-      
-      // Reset form by triggering a re-render
-      setTimeout(() => {
-        setSuccess(null);
-      }, 3000);
-
+      await apiService.deleteMongoForm(form._id);
+      navigate('/mongo-forms');
+      setSuccess('Form deleted successfully!');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create questionnaire');
+      setError(err instanceof Error ? err.message : 'Failed to delete form');
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   };
 
+  const updateForm = (updates: Partial<MongoForm>) => {
+    if (form) {
+      setForm({ ...form, ...updates });
+    }
+  };
+
+  const clearMessages = () => {
+    setError(null);
+    setSuccess(null);
+  };
+
   if (loading) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner text="Loading form..." />;
   }
 
+  if (!form) {
+    return <ErrorMessage message="Form not found" />;
+  }
+
+  const tabs = [
+    { id: 'questions' as TabType, label: 'Questions', icon: '📝' },
+    { id: 'logic' as TabType, label: 'Logic', icon: '🔗' },
+    { id: 'preview' as TabType, label: 'Preview', icon: '👁️' },
+    { id: 'settings' as TabType, label: 'Settings', icon: '⚙️' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Questionnaire Builder</h1>
-          <p className="mt-2 text-gray-600">
-            Create a new questionnaire by selecting questions from the available pool
-          </p>
-        </div>
-
-        {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
-        {success && <SuccessMessage message={success} onClose={() => setSuccess(null)} />}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Available Questions */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Available Questions ({questions.length})
-              </h2>
-              <QuestionList
-                questions={questions}
-                selectedQuestionIds={selectedQuestions.map(sq => sq.question.id)}
-                onQuestionSelect={handleQuestionSelect}
-              />
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Question Set Form */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                Questionnaire Details
-              </h2>
-              <QuestionSetForm
-                onSubmit={handleSubmit}
-                submitting={submitting}
-                disabled={selectedQuestions.length === 0}
-              />
-            </div>
-
-            {/* Selected Questions */}
-            {selectedQuestions.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  Selected Questions ({selectedQuestions.length})
-                </h2>
-                <SelectedQuestionsList
-                  selectedQuestions={selectedQuestions}
-                  onQuestionRemove={handleQuestionRemove}
-                  onQuestionUpdate={handleQuestionUpdate}
-                  onOrderChange={handleOrderChange}
-                />
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/mongo-forms')}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900">
+                  {isNewForm ? 'Create New Form' : form.title}
+                </h1>
+                <p className="text-sm text-gray-500">
+                  {isNewForm ? 'Build your questionnaire' : 'Edit your questionnaire'}
+                </p>
               </div>
-            )}
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleDuplicate}
+                disabled={saving || isNewForm}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                Duplicate
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={saving || isNewForm}
+                className="px-4 py-2 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+              >
+                Delete
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Messages */}
+      {error && <ErrorMessage message={error} onClose={clearMessages} />}
+      {success && <SuccessMessage message={success} onClose={clearMessages} />}
+
+      {/* Tabs */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-8">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <span className="mr-2">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'questions' && (
+          <QuestionsTab
+            form={form}
+            questions={questions}
+            onUpdateForm={updateForm}
+            onRefreshQuestions={fetchQuestions}
+          />
+        )}
+        {activeTab === 'logic' && (
+          <LogicTab
+            form={form}
+            onUpdateForm={updateForm}
+          />
+        )}
+        {activeTab === 'preview' && (
+          <PreviewTab form={form} />
+        )}
+        {activeTab === 'settings' && (
+          <SettingsTab
+            form={form}
+            onUpdateForm={updateForm}
+          />
+        )}
       </div>
     </div>
   );

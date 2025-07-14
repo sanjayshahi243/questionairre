@@ -1,9 +1,9 @@
 import { 
   Question, 
-  QuestionSet, 
-  CreateQuestionSetRequest, 
-  CreateQuestionSetQuestionRequest,
-  Dependency
+  MongoForm,
+  ResolvedMongoForm,
+  MongoFormSubmission,
+  MongoQuestion
 } from '../types/questionnaire';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -78,75 +78,106 @@ export const apiService = {
     if (!response.ok) throw new Error('Failed to delete question');
   },
 
-  // Question Sets
-  async getQuestionSets(): Promise<QuestionSet[]> {
-    const response = await fetch(`${API_BASE_URL}/question-sets/`, {
+  // MongoDB Questions
+  async getMongoQuestions(params?: { type?: string; search?: string }): Promise<MongoQuestion[]> {
+    const url = new URL(`${API_BASE_URL}/mongo/questions/`);
+    if (params?.type) url.searchParams.append('type', params.type);
+    if (params?.search) url.searchParams.append('search', params.search);
+    
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: createAuthHeaders(),
     });
-    return handleResponse<QuestionSet[]>(response);
+    return handleResponse<MongoQuestion[]>(response);
   },
 
-  async createQuestionSet(data: CreateQuestionSetRequest): Promise<QuestionSet> {
-    const response = await fetch(`${API_BASE_URL}/question-sets/`, {
+  async createMongoQuestion(data: Partial<MongoQuestion>): Promise<MongoQuestion> {
+    const response = await fetch(`${API_BASE_URL}/mongo/questions/`, {
       method: 'POST',
       headers: createAuthHeaders(),
       body: JSON.stringify(data),
     });
-    return handleResponse<QuestionSet>(response);
+    return handleResponse<MongoQuestion>(response);
   },
 
-  async addQuestionToSet(data: CreateQuestionSetQuestionRequest): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/question-set-questions/`, {
-      method: 'POST',
+  async updateMongoQuestion(id: string, data: Partial<MongoQuestion>): Promise<MongoQuestion> {
+    const response = await fetch(`${API_BASE_URL}/mongo/questions/${id}/`, {
+      method: 'PUT',
       headers: createAuthHeaders(),
       body: JSON.stringify(data),
     });
-    return handleResponse<any>(response);
+    return handleResponse<MongoQuestion>(response);
   },
 
-  async bulkAddQuestionsToSet(questionSetId: string, questions: CreateQuestionSetQuestionRequest[]): Promise<any[]> {
-    const promises = questions.map(question => 
-      this.addQuestionToSet({
-        ...question,
-        question_set: questionSetId,
-      })
-    );
-    return Promise.all(promises);
-  },
-
-  // Dependencies
-  async getDependencies(): Promise<Dependency[]> {
-    const response = await fetch(`${API_BASE_URL}/dependencies/`, {
-      method: 'GET',
-      headers: createAuthHeaders(),
-    });
-    return handleResponse<Dependency[]>(response);
-  },
-
-  async createDependency(data: Partial<Dependency>): Promise<Dependency> {
-    const response = await fetch(`${API_BASE_URL}/dependencies/`, {
-      method: 'POST',
-      headers: createAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return handleResponse<Dependency>(response);
-  },
-
-  async updateDependency(id: string, data: Partial<Dependency>): Promise<Dependency> {
-    const response = await fetch(`${API_BASE_URL}/dependencies/${id}/`, {
-      method: 'PATCH',
-      headers: createAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return handleResponse<Dependency>(response);
-  },
-
-  async deleteDependency(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/dependencies/${id}/`, {
+  async deleteMongoQuestion(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/mongo/questions/${id}/`, {
       method: 'DELETE',
       headers: createAuthHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to delete dependency');
+    if (!response.ok) throw new Error('Failed to delete question');
+  },
+
+  // MongoDB Forms
+  async getMongoForms(params?: { is_active?: boolean; search?: string }): Promise<MongoForm[]> {
+    const url = new URL(`${API_BASE_URL}/mongo/forms/`);
+    if (params?.is_active !== undefined) url.searchParams.append('is_active', params.is_active.toString());
+    if (params?.search) url.searchParams.append('search', params.search);
+    
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+    return handleResponse<MongoForm[]>(response);
+  },
+
+  async createMongoForm(data: Partial<MongoForm>): Promise<MongoForm> {
+    const response = await fetch(`${API_BASE_URL}/mongo/forms/`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<MongoForm>(response);
+  },
+
+  async updateMongoForm(formId: string, data: Partial<MongoForm>): Promise<MongoForm> {
+    const response = await fetch(`${API_BASE_URL}/mongo/forms/${formId}/`, {
+      method: 'PUT',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse<MongoForm>(response);
+  },
+
+  async deleteMongoForm(formId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/mongo/forms/${formId}/`, {
+      method: 'DELETE',
+      headers: createAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete form');
+  },
+
+  async duplicateMongoForm(formId: string): Promise<MongoForm> {
+    const response = await fetch(`${API_BASE_URL}/mongo/forms/${formId}/duplicate/`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+    });
+    return handleResponse<MongoForm>(response);
+  },
+
+  async getMongoForm(formId: string): Promise<ResolvedMongoForm> {
+    const response = await fetch(`${API_BASE_URL}/mongo/forms/${formId}/`, {
+      method: 'GET',
+      headers: createAuthHeaders(),
+    });
+    return handleResponse<ResolvedMongoForm>(response);
+  },
+
+  async submitMongoFormAnswers(formId: string, submission: MongoFormSubmission): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/mongo/forms/${formId}/submit/`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify(submission),
+    });
+    return handleResponse<any>(response);
   },
 }; 

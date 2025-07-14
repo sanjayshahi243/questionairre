@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from questionairre.questionnaire.models import Question, QuestionSet, QuestionSetQuestion, Answer, Dependency
+from questionairre.questionnaire.models import Question, QuestionSet, QuestionSetQuestion, Answer, Dependency, MongoFormAnswer
+from mongo_utils.mongo_models import MongoForm, MongoQuestion
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -282,3 +283,136 @@ class AnswerCreateSerializer(serializers.ModelSerializer):
         
         instance.save()
         return instance 
+
+class MongoQuestionSerializer(serializers.Serializer):
+    _id = serializers.CharField(required=False)  # Not required for creation
+    text = serializers.CharField(max_length=500)
+    type = serializers.ChoiceField(choices=[
+        'text', 'number', 'boolean', 'select', 'multiselect', 'date'
+    ])
+    options = serializers.ListField(
+        child=serializers.CharField(max_length=200), 
+        allow_empty=True, 
+        required=False
+    )
+    required = serializers.BooleanField(default=False)
+    default_value = serializers.CharField(allow_blank=True, required=False)
+    validation_rules = serializers.DictField(required=False, default=dict)
+    created_at = serializers.DateTimeField(required=False, read_only=True)
+    updated_at = serializers.DateTimeField(required=False, read_only=True)
+    
+    def validate(self, data):
+        """Validate question data."""
+        question_type = data.get('type')
+        options = data.get('options', [])
+        
+        # Validate options for appropriate question types
+        if question_type in ['select', 'multiselect']:
+            if not options:
+                raise serializers.ValidationError(
+                    f"Options are required for {question_type} questions"
+                )
+            if len(options) < 2:
+                raise serializers.ValidationError(
+                    f"At least 2 options are required for {question_type} questions"
+                )
+        
+        # Validate validation rules
+        validation_rules = data.get('validation_rules', {})
+        if validation_rules:
+            self._validate_validation_rules(validation_rules, question_type)
+        
+        return data
+    
+    def _validate_validation_rules(self, rules, question_type):
+        """Validate validation rules based on question type."""
+        if not isinstance(rules, dict):
+            raise serializers.ValidationError("validation_rules must be a dictionary")
+        
+        # Type-specific validation rules
+        if question_type == 'text':
+            valid_rules = ['min_length', 'max_length', 'pattern']
+        elif question_type == 'number':
+            valid_rules = ['min_value', 'max_value', 'step']
+        elif question_type == 'date':
+            valid_rules = ['min_date', 'max_date']
+        else:
+            valid_rules = []
+        
+        for rule in rules.keys():
+            if rule not in valid_rules:
+                raise serializers.ValidationError(
+                    f"Invalid validation rule '{rule}' for question type '{question_type}'"
+                )
+
+class MongoFormQuestionRefSerializer(serializers.Serializer):
+    question_id = serializers.CharField()
+    order = serializers.IntegerField(min_value=1)
+    required = serializers.BooleanField(default=False)
+    visible_if = serializers.DictField(required=False, allow_null=True)
+    
+    def validate_visible_if(self, value):
+        """Validate conditional logic structure."""
+        if value is None:
+            return value
+        
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("visible_if must be a dictionary")
+        
+        # Validate conditional logic structure
+        for question_id, condition in value.items():
+            if not isinstance(condition, dict):
+                raise serializers.ValidationError("Each condition must be a dictionary")
+            
+            if 'operator' not in condition or 'value' not in condition:
+                raise serializers.ValidationError(
+                    "Each condition must have 'operator' and 'value' keys"
+                )
+            
+            valid_operators = [
+                'equals', 'not_equals', 'contains', 'not_contains',
+                'greater_than', 'less_than', 'is_empty', 'is_not_empty'
+            ]
+            if condition['operator'] not in valid_operators:
+                raise serializers.ValidationError(
+                    f"Invalid operator. Must be one of: {', '.join(valid_operators)}"
+                )
+        
+        return value
+
+class MongoFormSerializer(serializers.Serializer):
+    _id = serializers.CharField(required=False)  # Not required for creation
+    title = serializers.CharField(max_length=200)
+    description = serializers.CharField(allow_blank=True, required=False, max_length=1000)
+    questions = MongoFormQuestionRefSerializer(many=True, required=False, default=list)
+    is_active = serializers.BooleanField(default=True)
+    created_at = serializers.DateTimeField(required=False, read_only=True)
+    updated_at = serializers.DateTimeField(required=False, read_only=True)
+    
+    def validate(self, data):
+        """Validate form data."""
+        questions = data.get('questions', [])
+        
+        # Validate question order uniqueness
+        orders = [q.get('order') for q in questions if q.get('order')]
+        if len(orders) != len(set(orders)):
+            raise serializers.ValidationError("Question orders must be unique")
+        
+        # Validate question IDs exist
+        question_ids = [q.get('question_id') for q in questions if q.get('question_id')]
+        if question_ids:
+            from mongo_utils.mongo_models import MongoQuestion
+            existing_questions = MongoQuestion.objects(_id__in=question_ids)
+            existing_ids = [q._id for q in existing_questions]
+            missing_ids = set(question_ids) - set(existing_ids)
+            if missing_ids:
+                raise serializers.ValidationError(
+                    f"Questions not found: {', '.join(missing_ids)}"
+                )
+        
+        return data
+
+class MongoFormAnswerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MongoFormAnswer
+        fields = ['id', 'form_id', 'question_id', 'user', 'value', 'submitted_at'] 

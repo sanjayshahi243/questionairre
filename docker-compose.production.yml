@@ -2,8 +2,8 @@ volumes:
   production_postgres_data: {}
   production_postgres_data_backups: {}
   production_traefik: {}
-  
   production_redis_data: {}
+  production_mongodb_data: {}
   
 
 
@@ -17,6 +17,7 @@ services:
     depends_on:
       - postgres
       - redis
+      - mongodb
     env_file:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
@@ -49,24 +50,44 @@ services:
 
   redis:
     image: docker.io/redis:6
-    
     volumes:
       - production_redis_data:/data
+
+  mongodb:
+    image: mongo:6.0
+    volumes:
+      - production_mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=questionairre
     
 
   celeryworker:
     <<: *django
     image: questionairre_production_celeryworker
+    depends_on:
+      - redis
+      - postgres
+      - mongodb
     command: /start-celeryworker
 
   celerybeat:
     <<: *django
     image: questionairre_production_celerybeat
+    depends_on:
+      - redis
+      - postgres
+      - mongodb
     command: /start-celerybeat
 
   flower:
     <<: *django
     image: questionairre_production_flower
+    depends_on:
+      - redis
+      - postgres
+      - mongodb
     command: /start-flower
 
   awscli:

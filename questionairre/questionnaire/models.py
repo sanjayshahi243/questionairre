@@ -311,3 +311,23 @@ class Dependency(models.Model):
         
         if 'operator' not in self.condition or 'value' not in self.condition:
             raise ValidationError(_("Condition must have 'operator' and 'value' keys")) 
+
+
+class MongoFormAnswer(models.Model):
+    """
+    Stores a user's answer to a question in a MongoDB-based form.
+    """
+    id = models.AutoField(primary_key=True)
+    form_id = models.CharField(max_length=100)  # Reference to MongoDB form _id
+    question_id = models.CharField(max_length=100)  # Reference to MongoDB question _id
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE)
+    value = models.JSONField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Mongo Form Answer"
+        verbose_name_plural = "Mongo Form Answers"
+        unique_together = ('form_id', 'question_id', 'user')
+
+    def __str__(self):
+        return f"Form {self.form_id} | Q {self.question_id} | User {self.user_id}" 

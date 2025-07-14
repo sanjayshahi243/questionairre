@@ -9,60 +9,106 @@ export interface Question {
   updated_at: string;
 }
 
-export interface QuestionSet {
-  id: string;
-  name: string;
-  description: string;
-  version: number;
-  is_active: boolean;
-  question_set_questions: QuestionSetQuestion[];
-  question_count: number;
+// MongoDB Types
+export interface MongoQuestion {
+  _id: string;
+  text: string;
+  type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date';
+  options?: string[];
+  required: boolean;
+  default_value?: string;
+  validation_rules?: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
 
-export interface QuestionSetQuestion {
-  id: string;
-  question_set: string;
-  question: Question;
+export interface MongoForm {
+  _id: string;
+  title: string;
+  description?: string;
+  questions: MongoFormQuestionRef[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MongoFormQuestionRef {
   question_id: string;
   order: number;
-  is_required: boolean;
-  overrides?: Record<string, any>;
-  effective_text: string;
-  effective_options?: string[];
-  effective_visible_if?: Record<string, any>;
+  required: boolean;
+  visible_if?: Record<string, any>;
+}
+
+export interface ResolvedMongoForm extends MongoForm {
+  resolved_questions: (MongoQuestion & {
+    order: number;
+    required: boolean;
+    visible_if?: Record<string, any>;
+  })[];
+}
+
+export interface MongoFormSubmission {
+  answers: {
+    question_id: string;
+    value: any;
+  }[];
+}
+
+export interface MongoFormAnswer {
+  id: string;
+  form_id: string;
+  question_id: string;
+  user: string;
+  value: any;
   created_at: string;
   updated_at: string;
 }
 
-export interface CreateQuestionSetRequest {
-  name: string;
-  description: string;
-  version: number;
+// API Request Types
+export interface CreateQuestionRequest {
+  text: string;
+  type: Question['type'];
+  options?: string[];
+  visible_if?: Record<string, any>;
+}
+
+export interface UpdateQuestionRequest {
+  text?: string;
+  type?: Question['type'];
+  options?: string[];
+  visible_if?: Record<string, any>;
   is_active?: boolean;
 }
 
-export interface CreateQuestionSetQuestionRequest {
-  question_set: string;
-  question_id: string;
-  order: number;
-  is_required: boolean;
-  overrides?: Record<string, any>;
+// MongoDB API Request Types
+export interface CreateMongoQuestionRequest {
+  text: string;
+  type: MongoQuestion['type'];
+  options?: string[];
+  required?: boolean;
+  default_value?: string;
+  validation_rules?: Record<string, any>;
 }
 
-export interface SelectedQuestion {
-  question: Question;
-  order: number;
-  is_required: boolean;
+export interface UpdateMongoQuestionRequest {
+  text?: string;
+  type?: MongoQuestion['type'];
+  options?: string[];
+  required?: boolean;
+  default_value?: string;
+  validation_rules?: Record<string, any>;
 }
 
-export interface Dependency {
-  id: string;
-  question: string;
-  dependent_question: string;
-  operator: string;
-  value: string;
-  created_at: string;
-  updated_at: string;
+export interface CreateMongoFormRequest {
+  title: string;
+  description?: string;
+  questions?: MongoFormQuestionRef[];
+  is_active?: boolean;
+}
+
+export interface UpdateMongoFormRequest {
+  title?: string;
+  description?: string;
+  questions?: MongoFormQuestionRef[];
+  is_active?: boolean;
 } 

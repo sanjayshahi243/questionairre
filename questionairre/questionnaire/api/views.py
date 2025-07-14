@@ -13,6 +13,415 @@ from questionairre.questionnaire.api.serializers import (
     AnswerCreateSerializer,
     DependencySerializer
 )
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from .serializers import MongoFormSerializer, MongoQuestionSerializer, MongoFormAnswerSerializer
+from mongo_utils.mongo_connection import get_mongo_connection
+from mongo_utils.mongo_models import MongoForm, MongoQuestion
+from questionairre.questionnaire.models import MongoFormAnswer
+from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
+import uuid
+from datetime import datetime
+
+get_mongo_connection()  # Ensure MongoDB is connected
+
+# MongoDB Question Management Views
+@extend_schema(
+    tags=['mongo-questions'],
+    description='MongoDB-based question management for the questionnaire builder',
+    responses={200: MongoQuestionSerializer(many=True)}
+)
+class MongoQuestionListView(APIView):
+    """
+    List and create MongoDB questions.
+    
+    Provides CRUD operations for questions stored in MongoDB.
+    These questions are used in dynamic forms and support various types.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """List all questions with optional filtering."""
+        questions = MongoQuestion.objects.all()
+        
+        # Apply filters
+        question_type = request.query_params.get('type')
+        if question_type:
+            questions = questions.filter(type=question_type)
+            
+        search = request.query_params.get('search')
+        if search:
+            questions = questions.filter(text__icontains=search)
+            
+        # Sort by creation date (newest first)
+        questions = questions.order_by('-created_at')
+        
+        serializer = MongoQuestionSerializer(questions, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a new question."""
+        serializer = MongoQuestionSerializer(data=request.data)
+        if serializer.is_valid():
+            # Generate unique ID
+            question_id = str(uuid.uuid4())
+            
+            # Create question
+            question = MongoQuestion(
+                _id=question_id,
+                text=serializer.validated_data['text'],
+                type=serializer.validated_data['type'],
+                options=serializer.validated_data.get('options', []),
+                required=serializer.validated_data.get('required', False),
+                default_value=serializer.validated_data.get('default_value'),
+                validation_rules=serializer.validated_data.get('validation_rules', {}),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            question.save()
+            
+            return Response(MongoQuestionSerializer(question).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@extend_schema(
+    tags=['mongo-questions'],
+    description='Retrieve, update, or delete a specific MongoDB question',
+    parameters=[
+        OpenApiParameter(
+            name='question_id',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description='The ID of the question to manage'
+        )
+    ],
+    responses={200: MongoQuestionSerializer}
+)
+class MongoQuestionDetailView(APIView):
+    """
+    Retrieve, update, or delete a specific MongoDB question.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, question_id):
+        """Retrieve a specific question."""
+        question = MongoQuestion.objects(_id=question_id).first()
+        if not question:
+            return Response({'error': 'Question not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = MongoQuestionSerializer(question)
+        return Response(serializer.data)
+
+    def put(self, request, question_id):
+        """Update a question."""
+        question = MongoQuestion.objects(_id=question_id).first()
+        if not question:
+            return Response({'error': 'Question not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = MongoQuestionSerializer(data=request.data)
+        if serializer.is_valid():
+            # Update fields
+            question.text = serializer.validated_data['text']
+            question.type = serializer.validated_data['type']
+            question.options = serializer.validated_data.get('options', [])
+            question.required = serializer.validated_data.get('required', False)
+            question.default_value = serializer.validated_data.get('default_value')
+            question.validation_rules = serializer.validated_data.get('validation_rules', {})
+            question.updated_at = datetime.utcnow()
+            question.save()
+            
+            return Response(MongoQuestionSerializer(question).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, question_id):
+        """Delete a question."""
+        question = MongoQuestion.objects(_id=question_id).first()
+        if not question:
+            return Response({'error': 'Question not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if question is used in any forms
+        forms_using_question = MongoForm.objects.filter(
+            questions__question_id=question_id
+        )
+        if forms_using_question:
+            return Response({
+                'error': 'Cannot delete question that is used in forms',
+                'forms_count': forms_using_question.count()
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        question.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+# Enhanced MongoDB Form Management Views
+@extend_schema(
+    tags=['mongo-forms'],
+    description='MongoDB-based dynamic forms management',
+    responses={200: MongoFormSerializer(many=True)}
+)
+class MongoFormListView(APIView):
+    """
+    List and create MongoDB-based dynamic forms.
+    
+    Returns a list of all available dynamic forms stored in MongoDB.
+    These forms are flexible and can contain various question types.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """List all forms with optional filtering."""
+        forms = MongoForm.objects.all()
+        
+        # Apply filters
+        is_active = request.query_params.get('is_active')
+        if is_active is not None:
+            forms = forms.filter(is_active=is_active.lower() == 'true')
+            
+        search = request.query_params.get('search')
+        if search:
+            forms = forms.filter(title__icontains=search)
+            
+        # Sort by creation date (newest first)
+        forms = forms.order_by('-created_at')
+        
+        serializer = MongoFormSerializer(forms, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        """Create a new form."""
+        serializer = MongoFormSerializer(data=request.data)
+        if serializer.is_valid():
+            # Generate unique ID
+            form_id = str(uuid.uuid4())
+            
+            # Create form
+            form = MongoForm(
+                _id=form_id,
+                title=serializer.validated_data['title'],
+                description=serializer.validated_data.get('description', ''),
+                questions=serializer.validated_data.get('questions', []),
+                is_active=serializer.validated_data.get('is_active', True),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            form.save()
+            
+            return Response(MongoFormSerializer(form).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@extend_schema(
+    tags=['mongo-forms'],
+    description='Get a specific MongoDB form with resolved questions',
+    parameters=[
+        OpenApiParameter(
+            name='form_id',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description='The ID of the form to retrieve'
+        )
+    ],
+    responses={200: MongoFormSerializer}
+)
+class MongoFormDetailView(APIView):
+    """
+    Retrieve, update, or delete a specific MongoDB form with resolved questions.
+    
+    Returns a form with all its questions resolved from the MongoDB database.
+    The response includes both form metadata and the actual question content.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, form_id):
+        """Retrieve a specific form with resolved questions."""
+        form = MongoForm.objects(_id=form_id).first()
+        if not form:
+            return Response({'error': 'Form not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Resolve questions
+        resolved_questions = []
+        for qref in form.questions:
+            question = MongoQuestion.objects(_id=qref['question_id']).first()
+            if not question:
+                continue
+            qdata = MongoQuestionSerializer(question).data
+            qdata.update({
+                'order': qref.get('order'),
+                'required': qref.get('required'),
+                'visible_if': qref.get('visible_if'),
+            })
+            resolved_questions.append(qdata)
+        
+        data = MongoFormSerializer(form).data
+        data['resolved_questions'] = resolved_questions
+        return Response(data)
+
+    def put(self, request, form_id):
+        """Update a form."""
+        form = MongoForm.objects(_id=form_id).first()
+        if not form:
+            return Response({'error': 'Form not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = MongoFormSerializer(data=request.data)
+        if serializer.is_valid():
+            # Update fields
+            form.title = serializer.validated_data['title']
+            form.description = serializer.validated_data.get('description', '')
+            form.questions = serializer.validated_data.get('questions', [])
+            form.is_active = serializer.validated_data.get('is_active', True)
+            form.updated_at = datetime.utcnow()
+            form.save()
+            
+            return Response(MongoFormSerializer(form).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, form_id):
+        """Delete a form."""
+        form = MongoForm.objects(_id=form_id).first()
+        if not form:
+            return Response({'error': 'Form not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if form has any answers
+        answers_count = MongoFormAnswer.objects.filter(form_id=form_id).count()
+        if answers_count > 0:
+            return Response({
+                'error': 'Cannot delete form that has answers',
+                'answers_count': answers_count
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        form.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+@extend_schema(
+    tags=['mongo-forms'],
+    description='Duplicate a MongoDB form',
+    parameters=[
+        OpenApiParameter(
+            name='form_id',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description='The ID of the form to duplicate'
+        )
+    ],
+    responses={201: MongoFormSerializer}
+)
+class MongoFormDuplicateView(APIView):
+    """
+    Duplicate a MongoDB form with a new ID.
+    
+    Creates a copy of an existing form with all its questions and settings.
+    Useful for creating variations of existing forms.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, form_id):
+        """Duplicate a form."""
+        original_form = MongoForm.objects(_id=form_id).first()
+        if not original_form:
+            return Response({'error': 'Form not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Generate new form ID
+        new_form_id = str(uuid.uuid4())
+        
+        # Create duplicate form
+        new_form = MongoForm(
+            _id=new_form_id,
+            title=f"{original_form.title} (Copy)",
+            description=original_form.description,
+            questions=original_form.questions,  # Copy questions array
+            is_active=False,  # Start as inactive
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        new_form.save()
+        
+        return Response(MongoFormSerializer(new_form).data, status=status.HTTP_201_CREATED)
+
+@extend_schema(
+    tags=['mongo-forms'],
+    description='Submit answers to a MongoDB form',
+    parameters=[
+        OpenApiParameter(
+            name='form_id',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.PATH,
+            description='The ID of the form to submit answers to'
+        )
+    ],
+    request=MongoFormAnswerSerializer,
+    responses={
+        201: MongoFormAnswerSerializer,
+        400: OpenApiTypes.OBJECT
+    },
+    examples=[
+        OpenApiExample(
+            'Valid submission',
+            value={
+                'answers': [
+                    {
+                        'question_id': '507f1f77bcf86cd799439011',
+                        'value': 'John Doe'
+                    },
+                    {
+                        'question_id': '507f1f77bcf86cd799439012',
+                        'value': 25
+                    }
+                ]
+            },
+            request_only=True
+        )
+    ]
+)
+class MongoFormAnswerSubmitView(APIView):
+    """
+    Submit answers to a MongoDB form.
+    
+    Accepts a list of question answers and saves them to the database.
+    Performs basic validation based on question types.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, form_id):
+        form = MongoForm.objects(_id=form_id).first()
+        if not form:
+            return Response({'error': 'Form not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        answers = request.data.get('answers', [])
+        user = request.user
+        errors = []
+        saved = []
+        
+        for ans in answers:
+            question_id = ans.get('question_id')
+            value = ans.get('value')
+            question = MongoQuestion.objects(_id=question_id).first()
+            
+            if not question:
+                errors.append({'question_id': question_id, 'error': 'Invalid question_id'})
+                continue
+            
+            # Basic type validation (expand as needed)
+            if question.type == 'number' and not isinstance(value, (int, float)):
+                errors.append({'question_id': question_id, 'error': 'Expected a number'})
+                continue
+            if question.type == 'boolean' and not isinstance(value, bool):
+                errors.append({'question_id': question_id, 'error': 'Expected a boolean'})
+                continue
+            
+            # Save answer
+            answer_obj, created = MongoFormAnswer.objects.get_or_create(
+                form_id=form_id, question_id=question_id, user=user,
+                defaults={'value': value}
+            )
+            if not created:
+                answer_obj.value = value
+                answer_obj.save()
+            saved.append({'question_id': question_id, 'value': value})
+        
+        if errors:
+            return Response({'errors': errors, 'saved': saved}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'saved': saved}, status=status.HTTP_201_CREATED)
 
 
 class QuestionSetViewSet(viewsets.ModelViewSet):

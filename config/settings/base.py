@@ -437,3 +437,17 @@ SPECTACULAR_SETTINGS = {
 }
 # Your stuff...
 # ------------------------------------------------------------------------------
+
+# MongoDB Configuration
+# ------------------------------------------------------------------------------
+MONGO_HOST = env("MONGO_HOST", default="mongodb")
+MONGO_PORT = env.int("MONGO_PORT", default=27017)
+MONGO_USERNAME = env("MONGO_USERNAME", default="admin")
+MONGO_PASSWORD = env("MONGO_PASSWORD", default="password")
+MONGO_DATABASE = env("MONGO_DATABASE", default="questionairre")
+
+# MongoDB Connection String
+if MONGO_USERNAME and MONGO_PASSWORD:
+    MONGO_CONNECTION_STRING = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/{MONGO_DATABASE}?authSource=admin"
+else:
+    MONGO_CONNECTION_STRING = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/{MONGO_DATABASE}"

@@ -24,3 +24,8 @@ drf-spectacular==0.28.0  # https://github.com/tfranzel/drf-spectacular
 
 # Django Filters for API filtering
 django-filter==25.1  # https://github.com/carltongibson/django-filter
+
+# MongoDB
+# ------------------------------------------------------------------------------
+mongoengine==0.29.1  # https://github.com/MongoEngine/mongoengine
+pymongo==4.8.0  # https://github.com/mongodb/mongo-python-driver
